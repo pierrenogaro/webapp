@@ -6,6 +6,7 @@ export default function App() {
     const [recording, setRecording] = React.useState<Audio.Recording | null>(null);
     const [recordings, setRecordings] = React.useState<RecordingItem[]>([]);
     const [transcriptions, setTranscriptions] = React.useState<string[]>([]);
+    const [ollamaResponse, setOllamaResponse] = React.useState('');
 
     async function startRecording() {
         try {
@@ -43,7 +44,7 @@ export default function App() {
         }
     }
 
-    async function sendAudioToAPI(uri) {
+    async function sendAudio(uri) {
         try {
             const formData = new FormData();
             formData.append('file', {
@@ -65,15 +66,44 @@ export default function App() {
             });
 
             const data = await response.json();
-            console.log(data);
+            console.log('Transcription API Response:', data);
 
             if (data && data.text) {
                 setTranscriptions(prev => [...prev, data.text]);
+                await sendTranscription(data.text);
             }
         } catch (error) {
             console.error("Error sending audio to API:", error);
         }
     }
+
+    async function sendTranscription(responseText) {
+        try {
+            const body = {
+                stream: false,
+                prompt: responseText,
+                model: 'llama3.2',
+            };
+
+            const response = await fetch('https://ollama.esdlyon.dev/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+
+            const data = await response.json();
+            console.log('Response from Ollama:', data);
+
+            if (data && data.response) {
+                setOllamaResponse(data.response);
+            }
+        } catch (error) {
+            console.error("Error sending transcription to Ollama:", error);
+        }
+    }
+
 
     async function stopRecording() {
         setRecording(undefined);
@@ -85,7 +115,7 @@ export default function App() {
                 const uri = recording.getURI();
                 console.log('Recording saved at:', uri);
 
-                await sendAudioToAPI(uri);
+                await sendAudio(uri);
 
                 const { sound, status } = await recording.createNewLoadedSoundAsync();
                 const duration = getDurationFormatted(status.durationMillis);
@@ -112,11 +142,13 @@ export default function App() {
 
     function renderRecordingCards() {
         return recordings.map((recordingLine, index) => (
-            <View key={index} style={styles.card}>
-                <Text style={styles.cardText}>File: {recordingLine.file.split('/').pop()}</Text>
-                <Text style={styles.cardText}>Duration: {recordingLine.duration}</Text>
+            <View key={index} style={[styles.card, styles.userMessage]}>
+                <View style={styles.row}>
+                    <Text style={[styles.cardText, styles.label]}>Me :</Text>
+                    <Text style={[styles.cardText, styles.duration]}>{recordingLine.duration}</Text>
+                </View>
                 {transcriptions[index] && (
-                    <Text style={styles.cardText}>Transcription: {transcriptions[index]}</Text>
+                    <Text style={styles.cardText}>{transcriptions[index]}</Text>
                 )}
                 <Pressable
                     style={[styles.button, styles.playButton]}
@@ -136,7 +168,7 @@ export default function App() {
     return (
         <View style={styles.container}>
             <Pressable
-                style={[styles.button, recording ? styles.stopButton : styles.startButton]}
+                style={[styles.button, recording ? styles.stopButton : styles.startButton, styles.topButton]}
                 onPress={recording ? stopRecording : startRecording}
             >
                 <Text style={styles.buttonText}>
@@ -144,6 +176,15 @@ export default function App() {
                 </Text>
             </Pressable>
             {renderRecordingCards()}
+            {ollamaResponse && (
+                <View style={[styles.card, styles.ollamaMessage]}>
+                    <View style={styles.row}>
+                        <Text style={[styles.cardText, styles.label]}>Ollama :</Text>
+                    </View>
+                    <Text style={[styles.cardText, styles.ollamaText]}>{ollamaResponse}</Text>
+                </View>
+            )}
+
             {recordings.length > 0 && (
                 <Pressable style={[styles.button, styles.clearButton]} onPress={clearRecordings}>
                     <Text style={styles.buttonText}>Clear All</Text>
@@ -173,10 +214,38 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 3,
     },
-    cardText: {
+    userMessage: {
+        backgroundColor: '#85a8ef',
+        alignSelf: 'flex-end',
+    },
+    ollamaMessage: {
+        backgroundColor: '#dda20c',
+        alignSelf: 'flex-start',
         marginBottom: 10,
+    },
+    ollamaText: {
+        marginTop: 5,
         fontSize: 16,
         color: '#333',
+    },
+    label: {
+        fontWeight: 'bold',
+        marginBottom: 5,
+        fontSize: 16,
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    cardText: {
+        fontSize: 16,
+        color: '#333',
+    },
+    duration: {
+        color: '#555',
+        textAlign: 'right',
     },
     button: {
         paddingVertical: 10,
