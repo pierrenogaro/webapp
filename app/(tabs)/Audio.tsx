@@ -5,6 +5,7 @@ import { Audio } from 'expo-av';
 export default function App() {
     const [recording, setRecording] = React.useState<Audio.Recording | null>(null);
     const [recordings, setRecordings] = React.useState<RecordingItem[]>([]);
+    const [transcriptions, setTranscriptions] = React.useState<string[]>([]);
 
     async function startRecording() {
         try {
@@ -12,7 +13,7 @@ export default function App() {
             if (perm.status === "granted") {
                 await Audio.setAudioModeAsync({
                     allowsRecordingIOS: true,
-                    playsInSilentModeIOS: true
+                    playsInSilentModeIOS: true,
                 });
                 const recordingOptions = {
                     android: {
@@ -37,7 +38,41 @@ export default function App() {
                 const { recording } = await Audio.Recording.createAsync(recordingOptions);
                 setRecording(recording);
             }
-        } catch (err) {}
+        } catch (err) {
+            console.error('Failed to start recording:', err);
+        }
+    }
+
+    async function sendAudioToAPI(uri) {
+        try {
+            const formData = new FormData();
+            formData.append('file', {
+                uri,
+                name: 'recording.wav',
+                type: 'audio/wav',
+            });
+            formData.append('model', 'base');
+            formData.append('language', 'fr');
+            formData.append('initial_prompt', 'string');
+
+            const response = await fetch('http://10.9.65.3:8000/v1/transcriptions', {
+                method: 'POST',
+                headers: {
+                    Authorization: 'Bearer dummy_api_key',
+                    'Content-Type': 'multipart/form-data',
+                },
+                body: formData,
+            });
+
+            const data = await response.json();
+            console.log(data);
+
+            if (data && data.text) {
+                setTranscriptions(prev => [...prev, data.text]);
+            }
+        } catch (error) {
+            console.error("Error sending audio to API:", error);
+        }
     }
 
     async function stopRecording() {
@@ -46,35 +81,43 @@ export default function App() {
         if (recording) {
             try {
                 await recording.stopAndUnloadAsync();
+
                 const uri = recording.getURI();
                 console.log('Recording saved at:', uri);
 
-                let allRecordings = [...recordings];
-                const { sound, status } = await recording.createNewLoadedSoundAsync();
-                allRecordings.push({
-                    sound: sound,
-                    duration: getDurationFormatted(status.durationMillis),
-                    file: uri,
-                });
+                await sendAudioToAPI(uri);
 
-                setRecordings(allRecordings);
+                const { sound, status } = await recording.createNewLoadedSoundAsync();
+                const duration = getDurationFormatted(status.durationMillis);
+
+                setRecordings(prev => [
+                    ...prev,
+                    {
+                        sound: sound,
+                        duration: duration,
+                        file: uri,
+                    },
+                ]);
             } catch (error) {
                 console.error('Error stopping recording:', error);
             }
         }
     }
+
     function getDurationFormatted(milliseconds: number) {
-        const minutes = milliseconds / 1000 / 60;
-        const seconds = Math.round((minutes - Math.floor(minutes)) * 60);
-        return seconds < 10 ? `${Math.floor(minutes)}:0${seconds}` : `${Math.floor(minutes)}:${seconds}`
+        const minutes = Math.floor(milliseconds / 1000 / 60);
+        const seconds = Math.round((milliseconds / 1000) % 60);
+        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
     }
 
-    function getRecordingLines() {
+    function renderRecordingCards() {
         return recordings.map((recordingLine, index) => (
-            <View key={index} style={styles.row}>
-                <Text style={styles.fill}>
-                    Recording #{index + 1} | {recordingLine.duration}
-                </Text>
+            <View key={index} style={styles.card}>
+                <Text style={styles.cardText}>File: {recordingLine.file.split('/').pop()}</Text>
+                <Text style={styles.cardText}>Duration: {recordingLine.duration}</Text>
+                {transcriptions[index] && (
+                    <Text style={styles.cardText}>Transcription: {transcriptions[index]}</Text>
+                )}
                 <Pressable
                     style={[styles.button, styles.playButton]}
                     onPress={() => recordingLine.sound.replayAsync()}
@@ -87,6 +130,7 @@ export default function App() {
 
     function clearRecordings() {
         setRecordings([]);
+        setTranscriptions([]);
     }
 
     return (
@@ -99,10 +143,10 @@ export default function App() {
                     {recording ? 'Stop Recording' : 'Start Recording'}
                 </Text>
             </Pressable>
-            {getRecordingLines()}
+            {renderRecordingCards()}
             {recordings.length > 0 && (
                 <Pressable style={[styles.button, styles.clearButton]} onPress={clearRecordings}>
-                    <Text style={styles.buttonText}>Clear Recordings</Text>
+                    <Text style={styles.buttonText}>Clear All</Text>
                 </Pressable>
             )}
         </View>
@@ -115,17 +159,24 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         alignItems: 'center',
         justifyContent: 'center',
+        padding: 10,
     },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginLeft: 10,
-        marginRight: 40,
+    card: {
+        backgroundColor: '#f9f9f9',
+        padding: 15,
+        marginVertical: 10,
+        borderRadius: 8,
+        width: '90%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    fill: {
-        flex: 1,
-        margin: 15,
+    cardText: {
+        marginBottom: 10,
+        fontSize: 16,
+        color: '#333',
     },
     button: {
         paddingVertical: 10,
