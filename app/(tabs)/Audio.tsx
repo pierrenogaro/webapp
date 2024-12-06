@@ -77,6 +77,19 @@ export default function App() {
         }
     }
 
+    async function audioOllama(ollamaText: string) {
+        const tts = `http://10.9.65.3:5002/api/tts?text=${ollamaText}`;
+
+        try {
+            console.log('..................');
+            const { sound } = await Audio.Sound.createAsync({ uri: tts });
+            console.log('Playing audio...');
+            await sound.playAsync();
+        } catch (error) {
+            console.error("Error with audio :", error);
+        }
+    }
+
     async function sendTranscription(responseText) {
         try {
             const body = {
@@ -98,6 +111,7 @@ export default function App() {
 
             if (data && data.response) {
                 setOllamaResponse(data.response);
+                await audioOllama(data.response);
             }
         } catch (error) {
             console.error("Error sending transcription to Ollama:", error);
@@ -168,7 +182,7 @@ export default function App() {
     return (
         <View style={styles.container}>
             <Pressable
-                style={[styles.button, recording ? styles.stopButton : styles.startButton, styles.topButton]}
+                style={[styles.button, recording ? styles.stopButton : styles.startButton]}
                 onPress={recording ? stopRecording : startRecording}
             >
                 <Text style={styles.buttonText}>
@@ -182,6 +196,9 @@ export default function App() {
                         <Text style={[styles.cardText, styles.label]}>Ollama :</Text>
                     </View>
                     <Text style={[styles.cardText, styles.ollamaText]}>{ollamaResponse}</Text>
+                    <Pressable style={[styles.button, styles.playButton]} onPress={() => audioOllama(ollamaResponse)}>
+                        <Text style={styles.buttonText}>Play</Text>
+                    </Pressable>
                 </View>
             )}
 
