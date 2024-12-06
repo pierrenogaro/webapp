@@ -1,12 +1,37 @@
 import React from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { Audio } from 'expo-av';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function App() {
     const [recording, setRecording] = React.useState<Audio.Recording | null>(null);
     const [recordings, setRecordings] = React.useState<RecordingItem[]>([]);
     const [transcriptions, setTranscriptions] = React.useState<string[]>([]);
     const [ollamaResponse, setOllamaResponse] = React.useState('');
+
+
+    async function auth() {
+        try {
+            const token = await AsyncStorage.getItem('jwtToken');
+            if (token) {
+                setIsAuthenticated(true);
+            } else {
+                setIsAuthenticated(false);
+            }
+        } catch (error) {
+            alert(error);
+        }
+    }
+
+    async function storeToken(token) {
+        try {
+            await AsyncStorage.setItem('jwtToken', token);
+            console.log('Token stored successfully.');
+        } catch (error) {
+            console.error('Error storing token:', error);
+        }
+    }
+
 
     async function startRecording() {
         try {
@@ -46,6 +71,12 @@ export default function App() {
 
     async function sendAudio(uri) {
         try {
+            const token = await AsyncStorage.getItem('jwtToken');
+            if (!token) {
+                console.error('JWT token is not available.');
+                return;
+            }
+
             const formData = new FormData();
             formData.append('file', {
                 uri,
@@ -56,10 +87,10 @@ export default function App() {
             formData.append('language', 'fr');
             formData.append('initial_prompt', 'string');
 
-            const response = await fetch('http://10.9.65.3:8000/v1/transcriptions', {
+            const response = await fetch('https://felix.esdlyon.dev/whisper/v1/transcriptions', {
                 method: 'POST',
                 headers: {
-                    Authorization: 'Bearer dummy_api_key',
+                    Authorization: `Bearer ${token}`,
                     'Content-Type': 'multipart/form-data',
                 },
                 body: formData,
@@ -78,7 +109,7 @@ export default function App() {
     }
 
     async function audioOllama(ollamaText: string) {
-        const tts = `http://10.9.65.3:5002/api/tts?text=${ollamaText}`;
+        const tts = `https://felix.esdlyon.dev/coqui/api/tts?text=${ollamaText}`;
 
         try {
             console.log('..................');
@@ -92,16 +123,23 @@ export default function App() {
 
     async function sendTranscription(responseText) {
         try {
+            const token = await AsyncStorage.getItem('jwtToken');
+            if (!token) {
+                console.error('Ollama API token is not available.');
+                return;
+            }
+
             const body = {
                 stream: false,
                 prompt: responseText,
                 model: 'llama3.2',
             };
 
-            const response = await fetch('https://ollama.esdlyon.dev/api/generate', {
+            const response = await fetch('https://felix.esdlyon.dev/ollama', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify(body),
             });
@@ -114,7 +152,7 @@ export default function App() {
                 await audioOllama(data.response);
             }
         } catch (error) {
-            console.error("Error sending transcription to Ollama:", error);
+            console.error('Error sending transcription to Ollama:', error);
         }
     }
 
