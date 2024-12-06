@@ -21,28 +21,6 @@ export default function TabLayout() {
                 }}
             />
             <Tabs.Screen
-                name="Alcool"
-                options={{
-                    title: "Alcool",
-                    tabBarIcon: ({ color, focused }) => (
-                        <Ionicons name={focused ? "wine" : "wine-outline"} color={color} size={24} />
-                    ),
-                }}
-            />
-            <Tabs.Screen
-                name="Chuck"
-                options={{
-                    title: "Chuck",
-                    tabBarIcon: ({ color, focused }) => (
-                        <Ionicons
-                            name={focused ? "happy" : "happy-outline"}
-                            color={color}
-                            size={24}
-                        />
-                    ),
-                }}
-            />
-            <Tabs.Screen
                 name="Audio"
                 options={{
                     title: "Audio",
@@ -55,15 +33,7 @@ export default function TabLayout() {
                     ),
                 }}
             />
-            <Tabs.Screen
-                name="RegisterScreen"
-                options={{
-                    title: "Register",
-                    tabBarIcon: ({ color, focused }) => (
-                        <Ionicons name={focused ? "person-add" : "person-add-outline"} color={color} size={24} />
-                    ),
-                }}
-            />
+
             <Tabs.Screen
                 name="LoginScreen"
                 options={{
